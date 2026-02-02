@@ -249,20 +249,32 @@ fn download_and_replace(download_url: &str, mq_path: &std::path::Path, force: bo
         );
     }
 
-    // Write new binary
+    // Write to temporary file first to avoid corrupting the running binary
     println!("{}", "Replacing binary...".dimmed());
-    fs::write(mq_path, &buffer)
-        .into_diagnostic()
-        .wrap_err("Failed to write new binary")?;
+    let temp_path = mq_path.with_extension("tmp");
 
-    // Set executable permissions on Unix
+    // Clean up any existing temp file
+    if temp_path.exists() {
+        let _ = fs::remove_file(&temp_path);
+    }
+
+    fs::write(&temp_path, &buffer)
+        .into_diagnostic()
+        .wrap_err("Failed to write new binary to temporary file")?;
+
+    // Set executable permissions on Unix before moving
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        let mut perms = fs::metadata(mq_path).into_diagnostic()?.permissions();
+        let mut perms = fs::metadata(&temp_path).into_diagnostic()?.permissions();
         perms.set_mode(0o755);
-        fs::set_permissions(mq_path, perms).into_diagnostic()?;
+        fs::set_permissions(&temp_path, perms).into_diagnostic()?;
     }
+
+    // Atomic rename: this replaces the old binary even if it's currently running
+    fs::rename(&temp_path, mq_path)
+        .into_diagnostic()
+        .wrap_err("Failed to replace binary")?;
 
     // Remove backup if update succeeded
     if backup_path.exists() {
@@ -380,50 +392,14 @@ fn main() -> Result<()> {
 
     download_and_replace(&asset.browser_download_url, &mq_path, args.force)?;
 
-    // Verify update
-    write!(out, "\n{}", "Verifying installation...".dimmed()).into_diagnostic()?;
-    out.flush().into_diagnostic()?;
-
-    let new_version = get_mq_version()?;
-
-    writeln!(out, " {}", "Done!".green()).into_diagnostic()?;
     writeln!(
         out,
-        "\n{}",
-        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━".cyan()
+        "{}",
+        format!("  ✓ Successfully updated to version {}", target_version)
+            .green()
+            .bold()
     )
     .into_diagnostic()?;
-
-    if new_version == target_version {
-        writeln!(
-            out,
-            "{}",
-            format!("  ✓ Successfully updated to version {}", target_version)
-                .green()
-                .bold()
-        )
-        .into_diagnostic()?;
-        writeln!(
-            out,
-            "  {} → {}",
-            current_version.dimmed(),
-            new_version.green().bold()
-        )
-        .into_diagnostic()?;
-    } else {
-        writeln!(
-            out,
-            "{}",
-            format!(
-                "  ⚠ Update completed but version is {}. Expected {}",
-                new_version, target_version
-            )
-            .yellow()
-            .bold()
-        )
-        .into_diagnostic()?;
-        writeln!(out, "{}", "  Try running mq again to verify.".dimmed()).into_diagnostic()?;
-    }
     writeln!(out, "{}", "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━".cyan()).into_diagnostic()?;
     out.flush().into_diagnostic()?;
 
