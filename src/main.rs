@@ -6,6 +6,7 @@ use serde::Deserialize;
 use std::fs;
 use std::io::{Read, Write};
 use std::process::Command;
+use std::time::Duration;
 
 #[derive(Deserialize)]
 struct Release {
@@ -166,26 +167,83 @@ fn get_target_arch() -> &'static str {
     compile_error!("Unsupported platform");
 }
 
+fn print_logo() {
+    println!();
+    println!("{}", "           ███╗   ███╗ ██████╗ ".bright_cyan().bold());
+    println!("{}", "           ████╗ ████║██╔═══██╗".bright_cyan().bold());
+    println!("{}", "           ██╔████╔██║██║   ██║".bright_cyan().bold());
+    println!("{}", "           ██║╚██╔╝██║██║▄▄ ██║".bright_cyan().bold());
+    println!("{}", "           ██║ ╚═╝ ██║╚██████╔╝".bright_cyan().bold());
+    println!(
+        "{}",
+        "           ╚═╝     ╚═╝ ╚══════╝ ".bright_cyan().bold()
+    );
+    println!();
+    println!("{}", "        Update Manager for mq".bright_white());
+    println!("{}", "    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━".bright_black());
+    println!();
+}
+
 fn download_and_replace(download_url: &str, mq_path: &std::path::Path, force: bool) -> Result<()> {
     if !force {
-        println!("\n{}", "┌────────────────────────────────────────┐".cyan());
-        println!("{}", "│  The binary will be replaced          │".cyan());
-        println!("{}", "└────────────────────────────────────────┘".cyan());
-        print!("\n{} ", "Do you want to continue? [Y/n]".bold());
+        println!();
+        println!(
+            "{}",
+            "  ╭────────────────────────────────────────╮".bright_cyan()
+        );
+        println!(
+            "{}",
+            "  │                                        │".bright_cyan()
+        );
+        println!(
+            "  │  {}    │",
+            "⚠  The binary will be replaced    ".bright_yellow().bold()
+        );
+        println!(
+            "{}",
+            "  │                                        │".bright_cyan()
+        );
+        println!(
+            "{}",
+            "  ╰────────────────────────────────────────╯".bright_cyan()
+        );
+        print!(
+            "\n  {} {} ",
+            "❯".bright_cyan().bold(),
+            "Do you want to continue? [Y/n]".bold()
+        );
         std::io::stdout().flush().into_diagnostic()?;
 
         let mut input = String::new();
         std::io::stdin().read_line(&mut input).into_diagnostic()?;
 
         if !input.trim().is_empty() && !input.trim().eq_ignore_ascii_case("y") {
-            println!("\n{}", "✗ Update cancelled".yellow());
+            println!();
+            println!(
+                "  {} {}",
+                "✗".bright_red().bold(),
+                "Update cancelled".bright_red()
+            );
+            println!();
             return Ok(());
         }
     }
 
-    println!("\n{}", "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━".cyan());
-    println!("{}", "  Downloading binary...".bold());
-    println!("{}", "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━".cyan());
+    println!();
+    println!(
+        "{}",
+        "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━".bright_cyan()
+    );
+    println!(
+        "  {} {}",
+        "📦".to_string(),
+        "Downloading binary...".bright_white().bold()
+    );
+    println!(
+        "{}",
+        "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━".bright_cyan()
+    );
+    println!();
 
     let client = reqwest::blocking::Client::builder()
         .user_agent("mq-update")
@@ -210,10 +268,11 @@ fn download_and_replace(download_url: &str, mq_path: &std::path::Path, force: bo
     let pb = ProgressBar::new(total_size);
     pb.set_style(
         ProgressStyle::default_bar()
-            .template("{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {bytes}/{total_bytes} ({eta})")
+            .template("  {spinner:.bright_cyan} {msg} [{bar:40.bright_cyan/blue}] {bytes}/{total_bytes} {elapsed_precise}")
             .into_diagnostic()?
-            .progress_chars("█▓▒░ ")
+            .progress_chars("━╸─")
     );
+    pb.set_message("Downloading".to_string());
 
     let mut buffer = Vec::new();
     let mut downloaded: u64 = 0;
@@ -231,26 +290,47 @@ fn download_and_replace(download_url: &str, mq_path: &std::path::Path, force: bo
         }
     }
 
-    pb.finish_with_message("Download complete!");
+    pb.finish_and_clear();
 
-    println!("\n{} {}", "✓".green().bold(), "Download complete!".green());
+    println!("\n  {} {}\n",
+        "✓".bright_green().bold(),
+        "Download complete!".bright_green().bold()
+    );
 
     // Create backup
-    println!("\n{}", "Creating backup...".dimmed());
+    let spinner = ProgressBar::new_spinner();
+    spinner.set_style(
+        ProgressStyle::default_spinner()
+            .template("  {spinner:.bright_cyan} {msg}")
+            .into_diagnostic()?,
+    );
+    spinner.set_message("Creating backup...".to_string());
+    spinner.enable_steady_tick(Duration::from_millis(80));
+
     let backup_path = mq_path.with_extension("bak");
     if mq_path.exists() {
         fs::copy(mq_path, &backup_path)
             .into_diagnostic()
             .wrap_err("Failed to create backup")?;
+        spinner.finish_and_clear();
         println!(
-            "{} Backup created: {}",
-            "✓".green(),
-            backup_path.display().to_string().dimmed()
+            "  {} Backup created: {}",
+            "✓".bright_green().bold(),
+            backup_path.display().to_string().bright_black()
         );
+    } else {
+        spinner.finish_and_clear();
     }
 
     // Write to temporary file first to avoid corrupting the running binary
-    println!("{}", "Replacing binary...".dimmed());
+    let spinner = ProgressBar::new_spinner();
+    spinner.set_style(
+        ProgressStyle::default_spinner()
+            .template("  {spinner:.bright_cyan} {msg}")
+            .into_diagnostic()?,
+    );
+    spinner.set_message("Replacing binary...".to_string());
+    spinner.enable_steady_tick(Duration::from_millis(80));
     let temp_path = mq_path.with_extension("tmp");
 
     // Clean up any existing temp file
@@ -281,10 +361,11 @@ fn download_and_replace(download_url: &str, mq_path: &std::path::Path, force: bo
         let _ = fs::remove_file(&backup_path);
     }
 
+    spinner.finish_and_clear();
     println!(
-        "{} {}",
-        "✓".green().bold(),
-        "Binary replaced successfully!".green()
+        "  {} {}",
+        "✓".bright_green().bold(),
+        "Binary replaced successfully!".bright_green().bold()
     );
 
     Ok(())
@@ -293,76 +374,54 @@ fn download_and_replace(download_url: &str, mq_path: &std::path::Path, force: bo
 fn main() -> Result<()> {
     let args = Args::parse();
 
-    let stdout = std::io::stdout();
-    let mut out = std::io::BufWriter::new(stdout.lock());
-
-    writeln!(
-        out,
-        "\n{}",
-        "╔══════════════════════════════════════╗".cyan().bold()
-    )
-    .into_diagnostic()?;
-    writeln!(
-        out,
-        "{}",
-        "║       mq Update Manager              ║".cyan().bold()
-    )
-    .into_diagnostic()?;
-    writeln!(
-        out,
-        "{}",
-        "╚══════════════════════════════════════╝".cyan().bold()
-    )
-    .into_diagnostic()?;
+    print_logo();
 
     let mq_path = get_mq_path()?;
     let current_version = get_mq_version()?;
 
     if args.current {
-        writeln!(
-            out,
-            "\n{} {}",
-            "📦 Current mq version:".bold(),
-            current_version.green().bold()
-        )
-        .into_diagnostic()?;
-        out.flush().into_diagnostic()?;
+        println!("\n  {} {}\n  {} {}\n  {}\n",
+            "📦", "Current mq version".bright_white().bold(),
+            "├─".bright_black(), current_version.bright_green().bold(),
+            "└─────────────────────────────".bright_black()
+        );
         return Ok(());
     }
 
-    writeln!(
-        out,
-        "\n{} {}",
-        "📦 Current version:".bold(),
-        current_version.cyan()
-    )
-    .into_diagnostic()?;
+    println!("  {} {}\n  {} {}\n  {}",
+        "📦", "Current version".bright_white().bold(),
+        "├─".bright_black(), current_version.bright_cyan().bold(),
+        "│".bright_black()
+    );
 
-    write!(out, "{}", "🔍 Checking for updates...".dimmed()).into_diagnostic()?;
-    out.flush().into_diagnostic()?;
+    let spinner = ProgressBar::new_spinner();
+    spinner.set_style(
+        ProgressStyle::default_spinner()
+            .template("  {spinner:.bright_cyan} {msg}")
+            .unwrap(),
+    );
+    spinner.set_message("Checking for updates...".to_string());
+    spinner.enable_steady_tick(Duration::from_millis(80));
 
     let release = get_latest_release(args.target_version.as_ref())?;
     let target_version = release.tag_name.trim_start_matches('v');
 
-    writeln!(out, " {}", "Done!".green()).into_diagnostic()?;
-    writeln!(
-        out,
-        "{} {}",
-        "📦 Latest version: ".bold(),
-        target_version.green().bold()
-    )
-    .into_diagnostic()?;
+    spinner.finish_and_clear();
+
+    println!("  {} {}\n  {}\n  {} {}\n  {} {}",
+        "├─".bright_black(), "✓ Update check complete".bright_green(),
+        "│".bright_black(),
+        "📦", "Latest version".bright_white().bold(),
+        "└─".bright_black(), target_version.bright_green().bold()
+    );
 
     if !args.force && current_version == target_version {
-        writeln!(
-            out,
-            "\n{}",
-            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━".cyan()
-        )
-        .into_diagnostic()?;
-        writeln!(out, "{}", "  ✓ Already up-to-date!".green().bold()).into_diagnostic()?;
-        writeln!(out, "{}", "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━".cyan()).into_diagnostic()?;
-        out.flush().into_diagnostic()?;
+        println!("\n{}\n\n    {} {}\n    {} You're running the latest version\n\n{}\n",
+            "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━".bright_cyan(),
+            "✓".bright_green().bold(), "Already up-to-date!".bright_green().bold(),
+            "│".bright_black(),
+            "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━".bright_cyan()
+        );
         return Ok(());
     }
 
@@ -387,21 +446,22 @@ fn main() -> Result<()> {
             )
         })?;
 
-    writeln!(out, "\n{} {}", "🔗 Asset:".dimmed(), asset.name.dimmed()).into_diagnostic()?;
-    out.flush().into_diagnostic()?;
+    println!("\n  {} {}\n  {} {}",
+        "🔗", "Target asset".bright_white().bold(),
+        "└─".bright_black(), asset.name.bright_black()
+    );
 
     download_and_replace(&asset.browser_download_url, &mq_path, args.force)?;
 
-    writeln!(
-        out,
-        "{}",
-        format!("  ✓ Successfully updated to version {}", target_version)
-            .green()
-            .bold()
-    )
-    .into_diagnostic()?;
-    writeln!(out, "{}", "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━".cyan()).into_diagnostic()?;
-    out.flush().into_diagnostic()?;
+    println!("\n{}\n\n    {} {}\n    {} Version: {} {} {}\n\n{}\n",
+        "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━".bright_cyan(),
+        "✓".bright_green().bold(), "Successfully updated!".bright_green().bold(),
+        "│".bright_black(),
+        current_version.bright_cyan(),
+        "→".bright_white(),
+        target_version.bright_green().bold(),
+        "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━".bright_cyan()
+    );
 
     Ok(())
 }
