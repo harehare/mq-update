@@ -2,9 +2,11 @@
 
 Updater for the `mq` command-line tool.
 
+![demo](assets/demo.gif)
+
 ## Overview
 
-`mq-update` is a utility to update the `mq` binary to the latest version from GitHub releases. 
+`mq-update` is a utility to update the `mq` binary to the latest version from GitHub releases.
 
 ## Installation
 
@@ -82,4 +84,3 @@ mq-update --force
 ## License
 
 MIT License - see [LICENSE](LICENSE) for details.
-
