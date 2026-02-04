@@ -225,7 +225,7 @@ fn download_and_replace(download_url: &str, mq_path: &std::path::Path, force: bo
                 "Update cancelled".bright_red()
             );
             println!();
-            return Ok(());
+            return Err(miette::miette!("Update cancelled by user"));
         }
     }
 
@@ -292,7 +292,8 @@ fn download_and_replace(download_url: &str, mq_path: &std::path::Path, force: bo
 
     pb.finish_and_clear();
 
-    println!("\n  {} {}\n",
+    println!(
+        "\n  {} {}\n",
         "✓".bright_green().bold(),
         "Download complete!".bright_green().bold()
     );
@@ -380,17 +381,23 @@ fn main() -> Result<()> {
     let current_version = get_mq_version()?;
 
     if args.current {
-        println!("\n  {} {}\n  {} {}\n  {}\n",
-            "📦", "Current mq version".bright_white().bold(),
-            "├─".bright_black(), current_version.bright_green().bold(),
+        println!(
+            "\n  {} {}\n  {} {}\n  {}\n",
+            "📦",
+            "Current mq version".bright_white().bold(),
+            "├─".bright_black(),
+            current_version.bright_green().bold(),
             "└─────────────────────────────".bright_black()
         );
         return Ok(());
     }
 
-    println!("  {} {}\n  {} {}\n  {}",
-        "📦", "Current version".bright_white().bold(),
-        "├─".bright_black(), current_version.bright_cyan().bold(),
+    println!(
+        "  {} {}\n  {} {}\n  {}",
+        "📦",
+        "Current version".bright_white().bold(),
+        "├─".bright_black(),
+        current_version.bright_cyan().bold(),
         "│".bright_black()
     );
 
@@ -408,17 +415,23 @@ fn main() -> Result<()> {
 
     spinner.finish_and_clear();
 
-    println!("  {} {}\n  {}\n  {} {}\n  {} {}",
-        "├─".bright_black(), "✓ Update check complete".bright_green(),
+    println!(
+        "  {} {}\n  {}\n  {} {}\n  {} {}",
+        "├─".bright_black(),
+        "✓ Update check complete".bright_green(),
         "│".bright_black(),
-        "📦", "Latest version".bright_white().bold(),
-        "└─".bright_black(), target_version.bright_green().bold()
+        "📦",
+        "Latest version".bright_white().bold(),
+        "└─".bright_black(),
+        target_version.bright_green().bold()
     );
 
     if !args.force && current_version == target_version {
-        println!("\n{}\n\n    {} {}\n    {} You're running the latest version\n\n{}\n",
+        println!(
+            "\n{}\n\n    {} {}\n    {} You're running the latest version\n\n{}\n",
             "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━".bright_cyan(),
-            "✓".bright_green().bold(), "Already up-to-date!".bright_green().bold(),
+            "✓".bright_green().bold(),
+            "Already up-to-date!".bright_green().bold(),
             "│".bright_black(),
             "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━".bright_cyan()
         );
@@ -446,16 +459,21 @@ fn main() -> Result<()> {
             )
         })?;
 
-    println!("\n  {} {}\n  {} {}",
-        "🔗", "Target asset".bright_white().bold(),
-        "└─".bright_black(), asset.name.bright_black()
+    println!(
+        "\n  {} {}\n  {} {}",
+        "🔗",
+        "Target asset".bright_white().bold(),
+        "└─".bright_black(),
+        asset.name.bright_black()
     );
 
     download_and_replace(&asset.browser_download_url, &mq_path, args.force)?;
 
-    println!("\n{}\n\n    {} {}\n    {} Version: {} {} {}\n\n{}\n",
+    println!(
+        "\n{}\n\n    {} {}\n    {} Version: {} {} {}\n\n{}\n",
         "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━".bright_cyan(),
-        "✓".bright_green().bold(), "Successfully updated!".bright_green().bold(),
+        "✓".bright_green().bold(),
+        "Successfully updated!".bright_green().bold(),
         "│".bright_black(),
         current_version.bright_cyan(),
         "→".bright_white(),
