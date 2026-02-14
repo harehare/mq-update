@@ -234,11 +234,7 @@ fn download_and_replace(download_url: &str, mq_path: &std::path::Path, force: bo
         "{}",
         "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━".bright_cyan()
     );
-    println!(
-        "  {} {}",
-        "📦".to_string(),
-        "Downloading binary...".bright_white().bold()
-    );
+    println!("  📦 {}", "Downloading binary...".bright_white().bold());
     println!(
         "{}",
         "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━".bright_cyan()
@@ -382,8 +378,7 @@ fn main() -> Result<()> {
 
     if args.current {
         println!(
-            "\n  {} {}\n  {} {}\n  {}\n",
-            "📦",
+            "\n  📦 {}\n  {} {}\n  {}\n",
             "Current mq version".bright_white().bold(),
             "├─".bright_black(),
             current_version.bright_green().bold(),
@@ -393,8 +388,7 @@ fn main() -> Result<()> {
     }
 
     println!(
-        "  {} {}\n  {} {}\n  {}",
-        "📦",
+        "  📦 {}\n  {} {}\n  {}",
         "Current version".bright_white().bold(),
         "├─".bright_black(),
         current_version.bright_cyan().bold(),
@@ -416,11 +410,10 @@ fn main() -> Result<()> {
     spinner.finish_and_clear();
 
     println!(
-        "  {} {}\n  {}\n  {} {}\n  {} {}",
+        "  {} {}\n  {}\n  📦 {}\n  {} {}",
         "├─".bright_black(),
         "✓ Update check complete".bright_green(),
         "│".bright_black(),
-        "📦",
         "Latest version".bright_white().bold(),
         "└─".bright_black(),
         target_version.bright_green().bold()
@@ -460,8 +453,7 @@ fn main() -> Result<()> {
         })?;
 
     println!(
-        "\n  {} {}\n  {} {}",
-        "🔗",
+        "\n  🔗 {}\n  {} {}",
         "Target asset".bright_white().bold(),
         "└─".bright_black(),
         asset.name.bright_black()
