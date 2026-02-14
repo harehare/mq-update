@@ -1,12 +1,12 @@
 <h1 align="center"><code>mq-update</code></h1>
 
-Updater for the `mq` command-line tool.
+Updater for `mq` and `mq` subcommands (`mq-check`, `mq-conv`, etc.).
 
 ![demo](assets/demo.gif)
 
 ## Overview
 
-`mq-update` is a utility to update the `mq` binary to the latest version from GitHub releases.
+`mq-update` is a utility to update the `mq` binary and its subcommands (e.g., `mq-check`, `mq-conv`, `mq-docs`) to the latest version from GitHub releases.
 
 ## Installation
 
@@ -24,10 +24,20 @@ cargo install --git https://github.com/harehare/mq-update.git
 
 ## Usage
 
-### Update to the latest version
+### Update mq to the latest version
 
 ```bash
 mq-update
+```
+
+### Update a subcommand
+
+```bash
+# Update mq-check to the latest version
+mq-update check
+
+# Update mq-conv to the latest version
+mq-update conv
 ```
 
 ### Update to a specific version
@@ -36,12 +46,18 @@ mq-update
 mq-update --target v0.5.12
 # or
 mq-update --target 0.5.12
+
+# Subcommand with a specific version
+mq-update check --target v0.1.0
 ```
 
 ### Show current version
 
 ```bash
 mq-update --current
+
+# Subcommand version
+mq-update check --current
 ```
 
 ### Force reinstall
@@ -52,6 +68,7 @@ mq-update --force
 
 ## Options
 
+- `[SUBCOMMAND]`: Subcommand name to update (e.g., `check` for `mq-check`)
 - `-t, --target <VERSION>`: Target version to install (defaults to latest)
 - `-f, --force`: Force reinstall even if already up-to-date
 - `--current`: Show current version
@@ -60,12 +77,12 @@ mq-update --force
 
 ## How it works
 
-1. Checks the current version of `mq`
-2. Fetches the latest release information from GitHub
-3. Downloads the appropriate binary for your platform
-4. Creates a backup of the existing binary
-5. Replaces the existing binary with the new one
-6. Verifies the installation
+1. Locates the binary (`mq` or `mq-{subcommand}`) via `which`
+2. Checks the current version
+3. Fetches the latest release information from GitHub (`harehare/mq` or `harehare/mq-{subcommand}`)
+4. Downloads the appropriate binary for your platform
+5. Creates a backup of the existing binary
+6. Replaces the existing binary with the new one
 
 ## Supported Platforms
 

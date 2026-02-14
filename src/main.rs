@@ -23,6 +23,9 @@ struct Asset {
 #[derive(Parser, Debug)]
 #[command(author, version, about = "Update mq to the latest version", long_about = None)]
 struct Args {
+    /// Subcommand name to install/update (e.g., "check" for mq-check)
+    subcommand: Option<String>,
+
     /// Target version to install (defaults to latest)
     #[arg(short = 't', long = "target")]
     target_version: Option<String>,
@@ -36,53 +39,54 @@ struct Args {
     current: bool,
 }
 
-fn get_mq_path() -> Result<std::path::PathBuf> {
+fn get_binary_path(binary_name: &str) -> Result<std::path::PathBuf> {
     let output = Command::new("which")
-        .arg("mq")
+        .arg(binary_name)
         .output()
         .into_diagnostic()
-        .wrap_err("Failed to find mq in PATH")?;
+        .wrap_err(format!("Failed to find {} in PATH", binary_name))?;
 
     if !output.status.success() {
         return Err(miette::miette!(
-            "mq command not found in PATH. Make sure mq is installed."
+            "{} command not found in PATH. Make sure {} is installed.",
+            binary_name,
+            binary_name
         ));
     }
 
     let path_str = String::from_utf8(output.stdout)
         .into_diagnostic()
-        .wrap_err("Failed to parse mq path")?;
+        .wrap_err(format!("Failed to parse {} path", binary_name))?;
 
     Ok(std::path::PathBuf::from(path_str.trim()))
 }
 
-fn get_mq_version() -> Result<String> {
-    let output = Command::new("mq")
-        .arg("--version")
-        .output()
-        .into_diagnostic()
-        .wrap_err("Failed to execute 'mq --version'. Make sure mq is installed and in PATH.")?;
+fn get_binary_version(binary_name: &str) -> Result<Option<String>> {
+    let output = match Command::new(binary_name).arg("--version").output() {
+        Ok(output) => output,
+        Err(_) => return Ok(None),
+    };
 
     if !output.status.success() {
-        return Err(miette::miette!("mq command failed"));
+        return Ok(None);
     }
 
     let version_output = String::from_utf8(output.stdout)
         .into_diagnostic()
-        .wrap_err("Failed to parse mq version output")?;
+        .wrap_err("Failed to parse version output")?;
 
-    // Parse version from output like "mq 0.5.12" or "mq-cli 0.5.12"
+    // Parse version from output like "mq 0.5.12" or "mq-check 0.1.0"
     let version = version_output
         .split_whitespace()
         .last()
-        .ok_or_else(|| miette::miette!("Could not parse version from mq output"))?
+        .ok_or_else(|| miette::miette!("Could not parse version from output"))?
         .trim()
         .to_string();
 
-    Ok(version)
+    Ok(Some(version))
 }
 
-fn get_latest_release(target_version: Option<&String>) -> Result<Release> {
+fn get_latest_release(repo: &str, target_version: Option<&String>) -> Result<Release> {
     let url = if let Some(version) = target_version {
         let tag = if version.starts_with('v') {
             version.clone()
@@ -90,11 +94,11 @@ fn get_latest_release(target_version: Option<&String>) -> Result<Release> {
             format!("v{}", version)
         };
         format!(
-            "https://api.github.com/repos/harehare/mq/releases/tags/{}",
-            tag
+            "https://api.github.com/repos/{}/releases/tags/{}",
+            repo, tag
         )
     } else {
-        "https://api.github.com/repos/harehare/mq/releases/latest".to_string()
+        format!("https://api.github.com/repos/{}/releases/latest", repo)
     };
 
     let client = reqwest::blocking::Client::builder()
@@ -373,25 +377,59 @@ fn main() -> Result<()> {
 
     print_logo();
 
-    let mq_path = get_mq_path()?;
-    let current_version = get_mq_version()?;
+    let (binary_name, repo, display_name) = if let Some(ref sub) = args.subcommand {
+        (
+            format!("mq-{}", sub),
+            format!("harehare/mq-{}", sub),
+            format!("mq-{}", sub),
+        )
+    } else {
+        (
+            "mq".to_string(),
+            "harehare/mq".to_string(),
+            "mq".to_string(),
+        )
+    };
+
+    let binary_path = get_binary_path(&binary_name)?;
+    let current_version = get_binary_version(&binary_name)?;
 
     if args.current {
-        println!(
-            "\n  📦 {}\n  {} {}\n  {}\n",
-            "Current mq version".bright_white().bold(),
-            "├─".bright_black(),
-            current_version.bright_green().bold(),
-            "└─────────────────────────────".bright_black()
-        );
+        if let Some(ref ver) = current_version {
+            println!(
+                "\n  📦 {}\n  {} {}\n  {}\n",
+                format!("Current {} version", display_name)
+                    .bright_white()
+                    .bold(),
+                "├─".bright_black(),
+                ver.bright_green().bold(),
+                "└─────────────────────────────".bright_black()
+            );
+        } else {
+            println!(
+                "\n  📦 {}\n  {} {}\n  {}\n",
+                format!("Current {} version", display_name)
+                    .bright_white()
+                    .bold(),
+                "├─".bright_black(),
+                "unknown".bright_yellow().bold(),
+                "└─────────────────────────────".bright_black()
+            );
+        }
         return Ok(());
     }
 
     println!(
         "  📦 {}\n  {} {}\n  {}",
-        "Current version".bright_white().bold(),
+        format!("Current {} version", display_name)
+            .bright_white()
+            .bold(),
         "├─".bright_black(),
-        current_version.bright_cyan().bold(),
+        current_version
+            .as_deref()
+            .unwrap_or("unknown")
+            .bright_cyan()
+            .bold(),
         "│".bright_black()
     );
 
@@ -404,7 +442,7 @@ fn main() -> Result<()> {
     spinner.set_message("Checking for updates...".to_string());
     spinner.enable_steady_tick(Duration::from_millis(80));
 
-    let release = get_latest_release(args.target_version.as_ref())?;
+    let release = get_latest_release(&repo, args.target_version.as_ref())?;
     let target_version = release.tag_name.trim_start_matches('v');
 
     spinner.finish_and_clear();
@@ -419,7 +457,7 @@ fn main() -> Result<()> {
         target_version.bright_green().bold()
     );
 
-    if !args.force && current_version == target_version {
+    if !args.force && current_version.as_deref() == Some(target_version) {
         println!(
             "\n{}\n\n    {} {}\n    {} You're running the latest version\n\n{}\n",
             "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━".bright_cyan(),
@@ -432,7 +470,7 @@ fn main() -> Result<()> {
     }
 
     let target_arch = get_target_arch();
-    let asset_name = format!("mq-{}", target_arch);
+    let asset_name = format!("{}-{}", binary_name, target_arch);
 
     let asset = release
         .assets
@@ -459,15 +497,17 @@ fn main() -> Result<()> {
         asset.name.bright_black()
     );
 
-    download_and_replace(&asset.browser_download_url, &mq_path, args.force)?;
+    download_and_replace(&asset.browser_download_url, &binary_path, args.force)?;
 
     println!(
         "\n{}\n\n    {} {}\n    {} Version: {} {} {}\n\n{}\n",
         "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━".bright_cyan(),
         "✓".bright_green().bold(),
-        "Successfully updated!".bright_green().bold(),
+        format!("Successfully updated {}!", display_name)
+            .bright_green()
+            .bold(),
         "│".bright_black(),
-        current_version.bright_cyan(),
+        current_version.unwrap_or_default().bright_cyan(),
         "→".bright_white(),
         target_version.bright_green().bold(),
         "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━".bright_cyan()
