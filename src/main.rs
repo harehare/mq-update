@@ -39,7 +39,7 @@ struct Args {
     current: bool,
 }
 
-fn get_binary_path(binary_name: &str) -> Result<std::path::PathBuf> {
+fn get_binary_path(binary_name: &str) -> Result<Option<std::path::PathBuf>> {
     let output = Command::new("which")
         .arg(binary_name)
         .output()
@@ -47,18 +47,14 @@ fn get_binary_path(binary_name: &str) -> Result<std::path::PathBuf> {
         .wrap_err(format!("Failed to find {} in PATH", binary_name))?;
 
     if !output.status.success() {
-        return Err(miette::miette!(
-            "{} command not found in PATH. Make sure {} is installed.",
-            binary_name,
-            binary_name
-        ));
+        return Ok(None);
     }
 
     let path_str = String::from_utf8(output.stdout)
         .into_diagnostic()
         .wrap_err(format!("Failed to parse {} path", binary_name))?;
 
-    Ok(std::path::PathBuf::from(path_str.trim()))
+    Ok(Some(std::path::PathBuf::from(path_str.trim())))
 }
 
 fn get_binary_version(binary_name: &str) -> Result<Option<String>> {
@@ -188,8 +184,13 @@ fn print_logo() {
     println!();
 }
 
-fn download_and_replace(download_url: &str, mq_path: &std::path::Path, force: bool) -> Result<()> {
-    if !force {
+fn download_and_replace(
+    download_url: &str,
+    mq_path: &std::path::Path,
+    force: bool,
+    is_new_install: bool,
+) -> Result<()> {
+    if !force && !is_new_install {
         println!();
         println!(
             "{}",
@@ -392,10 +393,25 @@ fn main() -> Result<()> {
     };
 
     let binary_path = get_binary_path(&binary_name)?;
-    let current_version = get_binary_version(&binary_name)?;
+    let is_new_install = binary_path.is_none();
+    let current_version = if is_new_install {
+        None
+    } else {
+        get_binary_version(&binary_name)?
+    };
 
     if args.current {
-        if let Some(ref ver) = current_version {
+        if is_new_install {
+            println!(
+                "\n  📦 {}\n  {} {}\n  {}\n",
+                format!("{} is not installed", display_name)
+                    .bright_white()
+                    .bold(),
+                "├─".bright_black(),
+                "not found".bright_yellow().bold(),
+                "└─────────────────────────────".bright_black()
+            );
+        } else if let Some(ref ver) = current_version {
             println!(
                 "\n  📦 {}\n  {} {}\n  {}\n",
                 format!("Current {} version", display_name)
@@ -419,19 +435,29 @@ fn main() -> Result<()> {
         return Ok(());
     }
 
-    println!(
-        "  📦 {}\n  {} {}\n  {}",
-        format!("Current {} version", display_name)
-            .bright_white()
-            .bold(),
-        "├─".bright_black(),
-        current_version
-            .as_deref()
-            .unwrap_or("unknown")
-            .bright_cyan()
-            .bold(),
-        "│".bright_black()
-    );
+    if is_new_install {
+        println!(
+            "  📦 {}\n  {} {}\n  {}",
+            format!("Installing {}", display_name).bright_white().bold(),
+            "├─".bright_black(),
+            "not installed yet".bright_yellow().bold(),
+            "│".bright_black()
+        );
+    } else {
+        println!(
+            "  📦 {}\n  {} {}\n  {}",
+            format!("Current {} version", display_name)
+                .bright_white()
+                .bold(),
+            "├─".bright_black(),
+            current_version
+                .as_deref()
+                .unwrap_or("unknown")
+                .bright_cyan()
+                .bold(),
+            "│".bright_black()
+        );
+    }
 
     let spinner = ProgressBar::new_spinner();
     spinner.set_style(
@@ -457,7 +483,7 @@ fn main() -> Result<()> {
         target_version.bright_green().bold()
     );
 
-    if !args.force && current_version.as_deref() == Some(target_version) {
+    if !is_new_install && !args.force && current_version.as_deref() == Some(target_version) {
         println!(
             "\n{}\n\n    {} {}\n    {} You're running the latest version\n\n{}\n",
             "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━".bright_cyan(),
@@ -497,21 +523,66 @@ fn main() -> Result<()> {
         asset.name.bright_black()
     );
 
-    download_and_replace(&asset.browser_download_url, &binary_path, args.force)?;
+    let install_path = if let Some(path) = binary_path {
+        path
+    } else {
+        // Default installation path
+        let home = std::env::var("HOME")
+            .into_diagnostic()
+            .wrap_err("Failed to get HOME directory")?;
+        let bin_dir = std::path::PathBuf::from(home).join(".mq").join("bin");
+        fs::create_dir_all(&bin_dir)
+            .into_diagnostic()
+            .wrap_err("Failed to create installation directory")?;
+        bin_dir.join(&binary_name)
+    };
 
-    println!(
-        "\n{}\n\n    {} {}\n    {} Version: {} {} {}\n\n{}\n",
-        "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━".bright_cyan(),
-        "✓".bright_green().bold(),
-        format!("Successfully updated {}!", display_name)
-            .bright_green()
-            .bold(),
-        "│".bright_black(),
-        current_version.unwrap_or_default().bright_cyan(),
-        "→".bright_white(),
-        target_version.bright_green().bold(),
-        "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━".bright_cyan()
-    );
+    download_and_replace(
+        &asset.browser_download_url,
+        &install_path,
+        args.force,
+        is_new_install,
+    )?;
+
+    if is_new_install {
+        println!(
+            "\n{}\n\n    {} {}\n    {} Version: {}\n    {} Installed to: {}\n\n{}\n",
+            "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━".bright_cyan(),
+            "✓".bright_green().bold(),
+            format!("Successfully installed {}!", display_name)
+                .bright_green()
+                .bold(),
+            "│".bright_black(),
+            target_version.bright_green().bold(),
+            "│".bright_black(),
+            install_path.display().to_string().bright_black(),
+            "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━".bright_cyan()
+        );
+        println!(
+            "  {} Make sure {} is in your PATH\n",
+            "⚠".bright_yellow().bold(),
+            install_path
+                .parent()
+                .unwrap()
+                .display()
+                .to_string()
+                .bright_cyan()
+        );
+    } else {
+        println!(
+            "\n{}\n\n    {} {}\n    {} Version: {} {} {}\n\n{}\n",
+            "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━".bright_cyan(),
+            "✓".bright_green().bold(),
+            format!("Successfully updated {}!", display_name)
+                .bright_green()
+                .bold(),
+            "│".bright_black(),
+            current_version.unwrap_or_default().bright_cyan(),
+            "→".bright_white(),
+            target_version.bright_green().bold(),
+            "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━".bright_cyan()
+        );
+    }
 
     Ok(())
 }
