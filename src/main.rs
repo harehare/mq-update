@@ -21,6 +21,8 @@ struct Asset {
 }
 
 #[derive(Parser, Debug)]
+#[command(author = env!("CARGO_PKG_AUTHORS"))]
+#[command(version = env!("CARGO_PKG_VERSION"))]
 #[command(author, version, about = "Update mq to the latest version", long_about = None)]
 struct Args {
     /// Subcommand name to install/update (e.g., "check" for mq-check)
