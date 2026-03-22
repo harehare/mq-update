@@ -11,6 +11,7 @@ use std::time::Duration;
 #[derive(Deserialize)]
 struct Release {
     tag_name: String,
+    name: String,
     assets: Vec<Asset>,
 }
 
@@ -476,6 +477,11 @@ fn main() -> Result<()> {
 
     let release = get_latest_release(&repo, args.target_version.as_ref())?;
     let target_version = release.tag_name.trim_start_matches('v');
+    let release_name = if release.name.is_empty() {
+        target_version.to_string()
+    } else {
+        release.name.trim_start_matches('v').to_string()
+    };
 
     spinner.finish_and_clear();
 
@@ -486,10 +492,10 @@ fn main() -> Result<()> {
         "│".bright_black(),
         "Latest version".bright_white().bold(),
         "└─".bright_black(),
-        target_version.bright_green().bold()
+        release_name.bright_green().bold()
     );
 
-    if !is_new_install && !args.force && current_version.as_deref() == Some(target_version) {
+    if !is_new_install && !args.force && current_version.as_deref() == Some(release_name.as_str()) {
         println!(
             "\n{}\n\n    {} {}\n    {} You're running the latest version\n\n{}\n",
             "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━".bright_cyan(),
@@ -559,7 +565,7 @@ fn main() -> Result<()> {
                 .bright_green()
                 .bold(),
             "│".bright_black(),
-            target_version.bright_green().bold(),
+            release_name.bright_green().bold(),
             "│".bright_black(),
             install_path.display().to_string().bright_black(),
             "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━".bright_cyan()
@@ -585,7 +591,7 @@ fn main() -> Result<()> {
             "│".bright_black(),
             current_version.unwrap_or_default().bright_cyan(),
             "→".bright_white(),
-            target_version.bright_green().bold(),
+            release_name.bright_green().bold(),
             "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━".bright_cyan()
         );
     }

@@ -9,7 +9,7 @@ license = "MIT"
 name = "mq-update"
 readme = "README.md"
 repository = "https://github.com/harehare/mq"
-version = "0.1.8"
+version = "0.1.9"
 
 [dependencies]
 clap = { version = "4.6.0", features = ["derive"] }
