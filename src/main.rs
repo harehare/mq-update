@@ -382,7 +382,7 @@ fn main() -> Result<()> {
     print_logo();
 
     // Subcommands that are released from the main harehare/mq repository
-    const MQ_REPO_SUBCOMMANDS: &[&str] = &["lsp", "check", "dbg"];
+    const MQ_REPO_SUBCOMMANDS: &[&str] = &["lsp", "check", "dbg", "crawl"];
 
     let (binary_name, repo, display_name) = if let Some(ref sub) = args.subcommand {
         let repo = if MQ_REPO_SUBCOMMANDS.contains(&sub.as_str()) {
