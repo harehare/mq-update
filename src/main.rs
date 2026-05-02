@@ -542,7 +542,7 @@ fn main() -> Result<()> {
         let home = std::env::var("HOME")
             .into_diagnostic()
             .wrap_err("Failed to get HOME directory")?;
-        let bin_dir = std::path::PathBuf::from(home).join(".mq").join("bin");
+        let bin_dir = std::path::PathBuf::from(home).join(".local").join("bin");
         fs::create_dir_all(&bin_dir)
             .into_diagnostic()
             .wrap_err("Failed to create installation directory")?;
