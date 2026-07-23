@@ -872,7 +872,7 @@ dependencies = [
 
 [[package]]
 name = "mq-update"
-version = "0.1.13"
+version = "0.1.14"
 dependencies = [
  "clap",
  "colored",
