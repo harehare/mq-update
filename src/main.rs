@@ -1,4 +1,4 @@
-use clap::Parser;
+use clap::{CommandFactory, FromArgMatches, Parser};
 use colored::Colorize;
 use indicatif::{ProgressBar, ProgressStyle};
 use miette::{Context, IntoDiagnostic, Result};
@@ -21,12 +21,30 @@ struct Asset {
     browser_download_url: String,
 }
 
+/// Official mq tools released as part of the harehare/mq repository itself.
+const MQ_REPO_TOOLS: &[&str] = &["check", "crawl", "dbg", "fmt", "lint", "lsp", "test"];
+
+/// Official mq tools released from their own dedicated repositories
+/// (harehare/mq-<name>), rather than from the harehare/mq repository.
+const MQ_STANDALONE_TOOLS: &[&str] = &["mcp", "tui", "view"];
+
+fn official_tools_help() -> String {
+    format!(
+        "Official mq tools (installed from harehare/mq):\n  {}\n\n\
+         Official mq tools (installed from their own repository):\n  {}\n\n\
+         Any other <SUBCOMMAND> is looked up as harehare/mq-<SUBCOMMAND>.",
+        MQ_REPO_TOOLS.join(", "),
+        MQ_STANDALONE_TOOLS.join(", ")
+    )
+}
+
 #[derive(Parser, Debug)]
 #[command(author = env!("CARGO_PKG_AUTHORS"))]
 #[command(version = env!("CARGO_PKG_VERSION"))]
 #[command(author, version, about = "Update mq to the latest version", long_about = None)]
 struct Args {
-    /// Subcommand name to install/update (e.g., "check" for mq-check)
+    /// Subcommand name to install/update (e.g., "check" for mq-check).
+    /// Run with --list-tools to see all official tools.
     subcommand: Option<String>,
 
     /// Target version to install (defaults to latest)
@@ -40,6 +58,10 @@ struct Args {
     /// Show current version
     #[arg(long)]
     current: bool,
+
+    /// List official mq tools available to install/update and exit
+    #[arg(short = 'l', long = "list-tools")]
+    list_tools: bool,
 }
 
 fn get_binary_path(binary_name: &str) -> Result<Option<std::path::PathBuf>> {
@@ -377,15 +399,19 @@ fn download_and_replace(
 }
 
 fn main() -> Result<()> {
-    let args = Args::parse();
+    let command = Args::command().after_help(official_tools_help());
+    let matches = command.get_matches();
+    let args = Args::from_arg_matches(&matches).into_diagnostic()?;
+
+    if args.list_tools {
+        println!("{}", official_tools_help());
+        return Ok(());
+    }
 
     print_logo();
 
-    // Subcommands that are released from the main harehare/mq repository
-    const MQ_REPO_SUBCOMMANDS: &[&str] = &["lsp", "check", "dbg", "crawl", "test", "fmt", "lint"];
-
     let (binary_name, repo, display_name) = if let Some(ref sub) = args.subcommand {
-        let repo = if MQ_REPO_SUBCOMMANDS.contains(&sub.as_str()) {
+        let repo = if MQ_REPO_TOOLS.contains(&sub.as_str()) {
             "harehare/mq".to_string()
         } else {
             format!("harehare/mq-{}", sub)
