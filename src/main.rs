@@ -43,9 +43,9 @@ fn official_tools_help() -> String {
 #[command(version = env!("CARGO_PKG_VERSION"))]
 #[command(author, version, about = "Update mq to the latest version", long_about = None)]
 struct Args {
-    /// Subcommand name to install/update (e.g., "check" for mq-check).
+    /// Subcommand names to install/update (e.g., "check" for mq-check). Multiple can be given.
     /// Run with --list-tools to see all official tools.
-    subcommand: Option<String>,
+    subcommands: Vec<String>,
 
     /// Target version to install (defaults to latest)
     #[arg(short = 't', long = "target")]
@@ -410,8 +410,51 @@ fn main() -> Result<()> {
 
     print_logo();
 
-    let (binary_name, repo, display_name) = if let Some(ref sub) = args.subcommand {
-        let repo = if MQ_REPO_TOOLS.contains(&sub.as_str()) {
+    let targets: Vec<Option<String>> = if args.subcommands.is_empty() {
+        vec![None]
+    } else {
+        args.subcommands.iter().cloned().map(Some).collect()
+    };
+
+    let multiple = targets.len() > 1;
+    let mut failures = Vec::new();
+
+    for (index, sub) in targets.iter().enumerate() {
+        if multiple {
+            if index > 0 {
+                println!();
+            }
+            println!(
+                "{}",
+                "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━".bright_black()
+            );
+        }
+
+        if let Err(err) = update_one(sub.as_deref(), &args) {
+            let display_name = sub
+                .as_deref()
+                .map(|s| format!("mq-{}", s))
+                .unwrap_or_else(|| "mq".to_string());
+            println!(
+                "\n  {} {}: {}",
+                "✗".bright_red().bold(),
+                format!("Failed to update {}", display_name).bright_red(),
+                err
+            );
+            failures.push(display_name);
+        }
+    }
+
+    if !failures.is_empty() {
+        return Err(miette::miette!("Failed to update: {}", failures.join(", ")));
+    }
+
+    Ok(())
+}
+
+fn update_one(sub: Option<&str>, args: &Args) -> Result<()> {
+    let (binary_name, repo, display_name) = if let Some(sub) = sub {
+        let repo = if MQ_REPO_TOOLS.contains(&sub) {
             "harehare/mq".to_string()
         } else {
             format!("harehare/mq-{}", sub)
