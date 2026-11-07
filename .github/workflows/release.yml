@@ -29,15 +29,15 @@ jobs:
             ext: ""
             asset_name: aarch64-apple-darwin
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions-rust-lang/setup-rust-toolchain@v1
+      - uses: actions/checkout@v4.4.0
+      - uses: actions-rust-lang/setup-rust-toolchain@v1.17.0
       - name: Build
         run: cargo build --release --target ${{ matrix.target }}
       - name: Rename artifact
         run: |
           mv target/${{ matrix.target }}/release/mq-update${{ matrix.ext }} target/${{ matrix.target }}/release/mq-update-${{ matrix.asset_name}}${{ matrix.ext }}
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v4.6.2
         with:
           name: mq-update-${{ matrix.asset_name }}
           path: |
@@ -54,7 +54,7 @@ jobs:
       contents: write
     steps:
       - name: Download artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v4.3.0
         with:
           pattern: mq-update*
           path: target
@@ -68,7 +68,7 @@ jobs:
           mv checksums.txt ./checksums/checksums.txt
       - name: Create Release
         id: create_release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v2.6.2
         with:
           files: target/*/*
           draft: true
